@@ -1,14 +1,11 @@
 # rv32i — a minimal RISC-V CPU in Verilog
 
-Single-cycle RV32I core. Built as a natural upgrade from a custom 16-bit CPU project,
-keeping the same structure and style.
+Single-cycle RV32I core.
 
 ## What it implements
 
 18 instructions: LUI, ADDI, ANDI, ORI, XORI, SLTI, ADD, SUB, AND, OR, XOR, SLT,
 BEQ, BNE, JAL, JALR, LW, SW.
-
-No pipeline. No cache. No exceptions. Just a working core you can read and simulate.
 
 ## Files
 
