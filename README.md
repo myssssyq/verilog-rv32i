@@ -2,6 +2,9 @@
 
 Single-cycle RV32I core.
 
+Includes an interactive HTML datapath visualizer (`riscv_visualizer_wide.html`) that
+shows signal flow through the datapath.
+
 ## What it implements
 
 18 instructions: LUI, ADDI, ANDI, ORI, XORI, SLTI, ADD, SUB, AND, OR, XOR, SLT,
