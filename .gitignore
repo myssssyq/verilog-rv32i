@@ -1,0 +1,4 @@
+cpu_sim
+*.vcd
+__pycache__/
+*.pyc

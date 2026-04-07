@@ -1,0 +1,952 @@
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RV32I Datapath Visualizer</title>
+<style>
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --ink: #1f2937;
+  --muted: #6b7280;
+  --line: #cfd6df;
+  --fetch: #506b8f;
+  --ctrl: #8f6d3d;
+  --reg: #3f7a76;
+  --alu: #7d5d8c;
+  --mem: #8a5d64;
+  --wb: #5a6aa6;
+  --active: #111827;
+  --block-fill: #ffffff;
+  --block-stroke: #1f2937;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.topbar {
+  background: #ffffff;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-right: auto;
+}
+.subtitle {
+  color: var(--muted);
+  font-size: 12px;
+}
+button, select {
+  border: 1px solid #b7c1ce;
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 10px;
+  border-radius: 8px;
+  font: inherit;
+}
+button:hover, select:hover { border-color: #7a8aa0; }
+button.primary { background: #f8fafc; font-weight: 600; }
+.main {
+  display: grid;
+  grid-template-columns: minmax(900px, 1.7fr) minmax(360px, 0.9fr);
+  gap: 14px;
+  padding: 14px;
+}
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.card h2 {
+  margin: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+.diagram-wrap { overflow: auto; }
+#diagram {
+  display: block;
+  width: 100%;
+  min-width: 1420px;
+  background: #fbfcfe;
+}
+.right {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: 14px;
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+.stat {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fcfcfd;
+}
+.stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.stat .v { font-size: 16px; font-weight: 700; margin-top: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.decode-grid, .signal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+.kv {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+}
+.kv .k { font-size: 11px; color: var(--muted); }
+.kv .v { font-size: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin-top: 4px; }
+.panel-body { padding: 12px; }
+textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #fff;
+}
+.small-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.tables {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 12px;
+}
+.scroll-table {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 280px;
+}
+.table-title {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  background: #fafbfc;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+th, td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #edf1f5;
+  text-align: left;
+}
+tr.current { background: #eef5ff; }
+tr.changed { background: #fff7df; }
+#log {
+  height: 140px;
+  overflow: auto;
+  padding: 12px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: #0f172a;
+  color: #d1fae5;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 20px; height: 3px; display: inline-block; border-radius: 999px; }
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.readme {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fafbfd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.readme strong { color: var(--ink); }
+svg text { user-select: none; }
+.block { fill: var(--block-fill); stroke: var(--block-stroke); stroke-width: 1.6; }
+.block-title { font-size: 14px; font-weight: 700; fill: #111827; text-anchor: middle; }
+.block-sub { font-size: 11px; fill: #6b7280; text-anchor: middle; }
+.value { font-size: 11px; fill: #374151; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-anchor: middle; }
+.small { font-size: 10px; fill: #6b7280; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.wire { fill: none; stroke-width: 2.2; opacity: .7; }
+.wire.fetch { stroke: var(--fetch); marker-end: url(#arrow-fetch); }
+.wire.ctrl { stroke: var(--ctrl); marker-end: url(#arrow-ctrl); stroke-dasharray: 6 4; }
+.wire.reg { stroke: var(--reg); marker-end: url(#arrow-reg); }
+.wire.alu { stroke: var(--alu); marker-end: url(#arrow-alu); }
+.wire.mem { stroke: var(--mem); marker-end: url(#arrow-mem); }
+.wire.wb { stroke: var(--wb); marker-end: url(#arrow-wb); }
+.wire.active { opacity: 1; stroke-width: 3.1; }
+.port-label { font-size: 10px; fill: #4b5563; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.wire-label { font-size: 10px; fill: #374151; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-anchor: middle; }
+@media (max-width: 1300px) {
+  .main { grid-template-columns: 1fr; }
+  .right { grid-template-rows: none; }
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <div class="title">RV32I Datapath Visualizer</div>
+    <div class="subtitle">Faithful to the attached minimal single-cycle core: 18 instructions, no pipeline, manual wire routing</div>
+  </div>
+  <button class="primary" id="resetBtn">Reset</button>
+  <button class="primary" id="stepBtn">Step</button>
+  <button class="primary" id="runBtn">Run</button>
+  <button class="primary" id="stopBtn">Stop</button>
+  <label class="subtitle">Speed
+    <select id="speedSel">
+      <option value="800">Very slow</option>
+      <option value="450">Slow</option>
+      <option value="220" selected="">Normal</option>
+      <option value="80">Fast</option>
+    </select>
+  </label>
+  <span class="badge" id="statusBadge">stopped</span>
+</div>
+
+<div class="main">
+  <div class="card">
+    <div class="readme">
+      <strong>Architecture summary:</strong> this app mirrors the attached Verilog core: <code>pc → imem → decoder/immgen/regfile → aMux/bMux → alu → ram/wbMux → regfile</code>, with explicit <code>pcPlus4</code>, <code>branchTarget</code>, <code>jalrTarget</code>, and <code>pcNext</code>. Control decisions come from the real decoder signals <code>regWrite</code>, <code>memWrite</code>, <code>aluSrcA</code>, <code>aluSrcB</code>, <code>wbSel</code>, <code>branch</code>, <code>jump</code>, and <code>aluOp</code>.
+      <br><strong>Layout strategy:</strong> fetch path stays on the left, decode and register data remain in the center, ALU and data memory stay on the right, and long feedback lines are routed around the top/bottom perimeter rather than through the middle.
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--fetch)"></i>fetch / next PC</span>
+      <span><i style="background:var(--ctrl)"></i>control</span>
+      <span><i style="background:var(--reg)"></i>register data</span>
+      <span><i style="background:var(--alu)"></i>ALU / immediate</span>
+      <span><i style="background:var(--mem)"></i>memory</span>
+      <span><i style="background:var(--wb)"></i>writeback</span>
+    </div>
+    <div class="diagram-wrap">
+      <svg id="diagram" viewBox="0 0 1860 760" xmlns="http://www.w3.org/2000/svg">
+        <!--
+          MANUAL LAYOUT GUIDE
+          1) Each block is a rect or polygon with x/y coordinates right here in the SVG.
+          2) To move a block, change its x/y (or polygon points) and then update the wires connected to it.
+          3) Each wire is a <path> with commands like M(start), H(horizontal), V(vertical).
+          4) For safest edits: move one block a little, then adjust only the few nearby wires that connect to it.
+          5) Long feedback lines intentionally use outer lanes near the top/bottom so the center stays readable.
+        -->
+        <defs>
+          <marker id="arrow-fetch" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#506b8f"></path></marker>
+          <marker id="arrow-ctrl" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#8f6d3d"></path></marker>
+          <marker id="arrow-reg" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#3f7a76"></path></marker>
+          <marker id="arrow-alu" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#7d5d8c"></path></marker>
+          <marker id="arrow-mem" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#8a5d64"></path></marker>
+          <marker id="arrow-wb" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="#5a6aa6"></path></marker>
+        </defs>
+
+        <rect x="40" y="40" width="1780" height="680" rx="22" fill="#ffffff" stroke="#e5e7eb"></rect>
+
+        <!-- BLOCK POSITIONS START: edit these x/y values to move datapath elements -->
+        <!-- PC block -->
+        <rect class="block" x="90" y="290" width="90" height="64" rx="12"></rect>
+        <text class="block-title" x="135" y="317">PC</text>
+        <text class="value" id="v-pc" x="135" y="339">0x00000000</text>
+
+        <rect class="block" x="90" y="140" width="92" height="56" rx="12"></rect>
+        <text class="block-title" x="136" y="165">PC + 4</text>
+        <text class="value" id="v-pc4" x="136" y="185">0x00000004</text>
+
+        <rect class="block" x="300" y="260" width="120" height="126" rx="12"></rect>
+        <text class="block-title" x="360" y="292">Instruction</text>
+        <text class="block-title" x="360" y="310">Memory</text>
+        <text class="block-sub" x="360" y="328">ROM[pc[11:2]]</text>
+        <text class="value" id="v-instr" x="360" y="350">0x00500093</text>
+        <text class="block-sub" x="360" y="370" id="v-mnemonic">ADDI x1, x0, 5</text>
+
+        <rect class="block" x="560" y="140" width="158" height="126" rx="12"></rect>
+        <text class="block-title" x="639" y="168">Decoder / Control</text>
+        <text class="value" id="v-opcode" x="639" y="192">opcode 0013 (0010011)</text>
+        <text class="value" id="v-f3f7" x="639" y="210">funct3 0 · funct7b5 0</text>
+        <text class="value" id="v-rdflds" x="639" y="228">rd x1 · rs1 x0 · rs2 x5</text>
+        <text class="block-sub" x="639" y="248">regWrite / memWrite / branch / jump</text>
+
+        <rect class="block" x="560" y="320" width="158" height="78" rx="12"></rect>
+        <text class="block-title" x="639" y="347">Immediate</text>
+        <text class="block-title" x="639" y="365">Generator</text>
+        <text class="value" id="v-imm" x="639" y="386">0x00000005</text>
+
+        <rect class="block" x="840" y="235" width="180" height="170" rx="12"></rect>
+        <text class="block-title" x="930" y="262">Register File</text>
+        <text class="block-sub" x="930" y="282">x0 hardwired to zero</text>
+        <text class="value" id="v-rs1" x="930" y="306">rs1  x0 = 0x00000000</text>
+        <text class="value" id="v-rs2" x="930" y="326">rs2  x5 = 0x00000000</text>
+        <text class="value" id="v-rd" x="930" y="346">rd   x1 ← 0x00000005</text>
+        <text class="block-sub" x="930" y="372">read data on left, writeback from top lane</text>
+
+        <polygon class="block" points="1100,248 1160,270 1160,328 1100,350"></polygon>
+        <text class="block-title" x="1124" y="286">A</text>
+        <text class="block-sub" x="1124" y="302">mux</text>
+        <text class="small" x="1120" y="240">0: rs1</text>
+        <text class="small" x="1120" y="350">1: PC</text>
+
+        <polygon class="block" points="1100,384 1160,406 1160,464 1100,486"></polygon>
+        <text class="block-title" x="1124" y="422">B</text>
+        <text class="block-sub" x="1124" y="438">mux</text>
+        <text class="small" x="1120" y="386">0: rs2</text>
+        <text class="small" x="1120" y="490">1: imm</text>
+
+        <polygon class="block" points="1300,250 1388,278 1388,456 1300,484 1254,456 1254,278"></polygon>
+        <text class="block-title" x="1321" y="330">ALU</text>
+        <text class="block-sub" x="1321" y="348">ADD SUB AND OR XOR SLT PASSB</text>
+        <text class="value" id="v-alu" x="1321" y="372">0x00000005</text>
+        <text class="value" id="v-aluin" x="1321" y="392">A 0x00000000 · B 0x00000005</text>
+
+        <rect class="block" x="1480" y="270" width="140" height="116" rx="12"></rect>
+        <text class="block-title" x="1550" y="300">Data Memory</text>
+        <text class="block-sub" x="1550" y="320">RAM[aluOut[11:2]]</text>
+        <text class="value" id="v-memaddr" x="1550" y="344">addr 0x00000005</text>
+        <text class="value" id="v-memio" x="1550" y="364">read 0x00000000</text>
+
+        <polygon class="block" points="1736,210 1794,236 1794,444 1736,470 1690,444 1690,236"></polygon>
+        <text class="block-title" x="1742" y="322">Writeback</text>
+        <text class="block-title" x="1742" y="340">Mux</text>
+        <text class="value" id="v-wb" x="1742" y="364">0x00000005</text>
+
+        <rect class="block" x="1450" y="86" width="320" height="96" rx="12"></rect>
+        <text class="block-title" x="1610" y="114">Next-PC Selection</text>
+        <text class="block-sub" x="1610" y="134">takeBranch ? (JALR ? jalrTarget : branchTarget) : pcPlus4</text>
+        <text class="value" id="v-targets" x="1610" y="156">branch 0x00000005 · jalr 0x00000004</text>
+        <text class="value" id="v-nextpc" x="1610" y="174">pcNext 0x00000004</text>
+
+        <!-- This version has already been widened substantially.
+        If you want even more spacing, these are the easiest next moves:
+             - move Register File by changing x="650"
+             - move ALU muxes / ALU by changing their polygon coordinates
+             - move Data Memory / Writeback Mux further right
+             After that, update the connected path lines below. -->
+        <rect class="block" x="820" y="500" width="360" height="100" rx="12"></rect>
+        <text class="block-title" x="1000" y="528">Branch / Jump Decision</text>
+        <text class="value" id="v-branchcmp" x="1000" y="552">eq 1 · neq 0 · branch 0 · jump 0</text>
+        <text class="value" id="v-takebranch" x="1000" y="574">takeBranch 0 · isJalr 0</text>
+
+        <!-- WIRE ROUTES START: edit d="..." to move wires. Use M=start, H=horizontal, V=vertical. -->
+        <path id="w-pc-imem" class="wire fetch active" d="M180 322 H300"></path>
+        <text class="wire-label" x="250" y="314">pcOut</text>
+
+        <path id="w-pc-pc4" class="wire fetch active" d="M135 290 V196"></path>
+        <text class="wire-label" x="118" y="238">pcOut</text>
+
+        <path id="w-pc4-next" class="wire fetch active" d="M182 168 H1380 V116 H1450"></path>
+        <text class="wire-label" x="760" y="108">pcPlus4 outer lane</text>
+
+        <path id="w-imem-dec" class="wire fetch active" d="M420 286 H560"></path>
+        <text class="wire-label" x="490" y="278">instr</text>
+
+        <path id="w-imem-imm" class="wire fetch active" d="M420 360 H560"></path>
+        <text class="wire-label" x="490" y="352">instr</text>
+
+        <path id="w-dec-regaddr" class="wire ctrl active" d="M718 238 H760 V255 H840"></path>
+        <text class="wire-label" x="795" y="246">rs/rd addr</text>
+
+        <path id="w-dec-amux" class="wire ctrl active" d="M680 266 V275 H1100"></path>
+        <text class="wire-label" x="1050" y="268">aluSrcA</text>
+
+        <path id="w-dec-bmux" class="wire ctrl active" d="M698 266 V430 H1100"></path>
+        <text class="wire-label" x="760" y="426">aluSrcB</text>
+
+        <path id="w-dec-wbmux" class="wire ctrl active" d="M718 212 H1678 V240 H1690"></path>
+        <text class="wire-label" x="1190" y="204">wbSel</text>
+
+        <path id="w-dec-dmem" class="wire ctrl" d="M698 266 V646 H1520 V386"></path>
+        <text class="wire-label" x="1060" y="638">memWrite outer lane</text>
+
+        <path id="w-dec-branch" class="wire ctrl active" d="M660 266 V500 H1000"></path>
+        <text class="wire-label" x="800" y="492">branch / jump / funct3</text>
+
+        <path id="w-imm-bmux" class="wire alu active" d="M718 359 H972 V470 H1100"></path>
+        <text class="wire-label" x="930" y="462">immOut</text>
+
+        <path id="w-reg-rs1-amux" class="wire reg active" d="M1020 300 H1100"></path>
+        <text class="wire-label" x="1050" y="292">rs1Val</text>
+
+        <path id="w-reg-rs2-bmux" class="wire reg active" d="M1020 320 H1082 V406 H1100"></path>
+        <text class="wire-label" x="1060" y="398">rs2Val</text>
+
+        <path id="w-pc-amux" class="wire fetch" d="M180 336 H208 V636 H1074 V340 H1100"></path>
+        <text class="wire-label" x="620" y="628">PC outer return lane</text>
+
+        <path id="w-amux-alu" class="wire alu active" d="M1160 299 H1254"></path>
+        <text class="wire-label" x="1190" y="291">aluAIn</text>
+
+        <path id="w-bmux-alu" class="wire alu active" d="M1160 435 H1254"></path>
+        <text class="wire-label" x="1190" y="427">aluBIn</text>
+
+        <path id="w-alu-dmem" class="wire mem" d="M1388 367 H1480"></path>
+        <text class="wire-label" x="1434" y="359">aluOut addr/result</text>
+
+        <path id="w-rs2-dmem" class="wire mem" d="M1020 330 H1480"></path>
+        <text class="wire-label" x="1420" y="330">store data</text>
+
+        <path id="w-dmem-wbmux" class="wire mem" d="M1620 344 H1660 V416 H1690"></path>
+        <text class="wire-label" x="1650" y="388">memOut</text>
+
+        <path id="w-alu-wbmux" class="wire wb active" d="M1388 313 H1690"></path>
+        <text class="wire-label" x="1640" y="305">aluOut</text>
+
+        <path id="w-pc4-wbmux" class="wire wb" d="M182 168 H1656 V264 H1690"></path>
+        <text class="wire-label" x="1646" y="256">pcPlus4</text>
+
+        <path id="w-wbmux-reg" class="wire wb active" d="M1742 210 V68 H932 V235"></path>
+        <text class="wire-label" x="1280" y="60">wbOut outer top lane</text>
+
+        <path id="w-pc-branchtarget" class="wire fetch active" d="M180 322 H250 V110 H1380 V136 H1450"></path>
+        <text class="wire-label" x="860" y="86">pcOut lane for branchTarget</text>
+
+        <path id="w-rs1-nextpc" class="wire reg" d="M1020 290 H1412 V156 H1450"></path>
+        <text class="wire-label" x="1450" y="248">rs1Val for JALR</text>
+
+        <path id="w-imm-nextpc" class="wire alu active" d="M718 359 H1350 V176 H1450"></path>
+        <text class="wire-label" x="1120" y="168">immOut to target logic</text>
+
+        <path id="w-next-pc" class="wire fetch" d="M1450 96 H70 V322 H90"></path>
+        <text class="wire-label" x="300" y="88">pcNext outer feedback</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="card">
+      <h2>Cycle summary</h2>
+      <div class="summary-grid">
+        <div class="stat"><div class="k">Cycle</div><div class="v" id="sum-cycle">0</div></div>
+        <div class="stat"><div class="k">PC</div><div class="v" id="sum-pc">0x00000000</div></div>
+        <div class="stat"><div class="k">Next PC</div><div class="v" id="sum-nextpc">0x00000004</div></div>
+        <div class="stat"><div class="k">Instruction</div><div class="v" id="sum-instr">0x00500093</div></div>
+        <div class="stat"><div class="k">Assembly</div><div class="v" id="sum-asm">ADDI x1, x0, 5</div></div>
+        <div class="stat"><div class="k">Writeback</div><div class="v" id="sum-wb">0x00000005</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Decoded fields</h2>
+      <div class="decode-grid" id="decodeGrid"><div class="kv"><div class="k">opcode</div><div class="v">0013 / 0010011</div></div><div class="kv"><div class="k">rd</div><div class="v">x1</div></div><div class="kv"><div class="k">rs1</div><div class="v">x0</div></div><div class="kv"><div class="k">rs2</div><div class="v">x5</div></div><div class="kv"><div class="k">funct3</div><div class="v">0</div></div><div class="kv"><div class="k">funct7b5</div><div class="v">0</div></div><div class="kv"><div class="k">immSel</div><div class="v">0</div></div><div class="kv"><div class="k">immediate</div><div class="v">0x00000005 / 5</div></div></div>
+      <h2>Control signals</h2>
+      <div class="signal-grid" id="signalGrid"><div class="kv"><div class="k">regWrite</div><div class="v">1</div></div><div class="kv"><div class="k">memWrite</div><div class="v">0</div></div><div class="kv"><div class="k">aluSrcA</div><div class="v">0</div></div><div class="kv"><div class="k">aluSrcB</div><div class="v">1</div></div><div class="kv"><div class="k">wbSel</div><div class="v">0</div></div><div class="kv"><div class="k">branch</div><div class="v">0</div></div><div class="kv"><div class="k">jump</div><div class="v">0</div></div><div class="kv"><div class="k">aluOp</div><div class="v">0</div></div><div class="kv"><div class="k">branchEq</div><div class="v">1</div></div><div class="kv"><div class="k">branchNeq</div><div class="v">0</div></div><div class="kv"><div class="k">takeBranch</div><div class="v">0</div></div><div class="kv"><div class="k">isJalr</div><div class="v">0</div></div></div>
+    </div>
+
+    <div class="card">
+      <h2>Program input</h2>
+      <div class="panel-body">
+        <textarea id="programInput"></textarea>
+        <div class="small-row">
+          <button class="primary" id="loadBtn">Load program</button>
+          <button id="sampleBtn">Restore sample</button>
+          <span class="subtitle">Supports 32-bit hex words or a small assembly subset: LUI, ADDI, ANDI, ORI, XORI, SLTI, ADD, SUB, AND, OR, XOR, SLT, BEQ, BNE, JAL, JALR, LW, SW.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>State panels</h2>
+      <div class="tables">
+        <div class="scroll-table">
+          <div class="table-title">Instruction memory</div>
+          <table><thead><tr><th>Addr</th><th>Hex</th><th>Decoded</th></tr></thead><tbody id="instrTable"><tr class="current"><td>0x00000000</td><td>0x00500093</td><td>ADDI x1, x0, 5</td></tr><tr class=""><td>0x00000004</td><td>0x00A00113</td><td>ADDI x2, x0, 10</td></tr><tr class=""><td>0x00000008</td><td>0x002081B3</td><td>ADD x3, x1, x2</td></tr><tr class=""><td>0x0000000C</td><td>0x40110233</td><td>SUB x4, x2, x1</td></tr><tr class=""><td>0x00000010</td><td>0x0020F2B3</td><td>AND x5, x1, x2</td></tr><tr class=""><td>0x00000014</td><td>0x0020E333</td><td>OR x6, x1, x2</td></tr><tr class=""><td>0x00000018</td><td>0x0020C3B3</td><td>XOR x7, x1, x2</td></tr><tr class=""><td>0x0000001C</td><td>0x0020A433</td><td>SLT x8, x1, x2</td></tr><tr class=""><td>0x00000020</td><td>0x00302023</td><td>SW x3, 0(x0)</td></tr><tr class=""><td>0x00000024</td><td>0x00002483</td><td>LW x9, 0(x0)</td></tr><tr class=""><td>0x00000028</td><td>0xABCD0537</td><td>LUI x10, 0xABCD0000</td></tr><tr class=""><td>0x0000002C</td><td>0x12350513</td><td>ADDI x10, x10, 291</td></tr><tr class=""><td>0x00000030</td><td>0x00408463</td><td>BEQ x1, x4, 8</td></tr><tr class=""><td>0x00000034</td><td>0x06300593</td><td>ADDI x11, x0, 99</td></tr><tr class=""><td>0x00000038</td><td>0x02A00593</td><td>ADDI x11, x0, 42</td></tr><tr class=""><td>0x0000003C</td><td>0x00209463</td><td>BNE x1, x2, 8</td></tr><tr class=""><td>0x00000040</td><td>0x00000613</td><td>ADDI x12, x0, 0</td></tr><tr class=""><td>0x00000044</td><td>0x008006EF</td><td>JAL x13, 8</td></tr><tr class=""><td>0x00000048</td><td>0x03700713</td><td>ADDI x14, x0, 55</td></tr><tr class=""><td>0x0000004C</td><td>0x04D00713</td><td>ADDI x14, x0, 77</td></tr><tr class=""><td>0x00000050</td><td>0x000687E7</td><td>JALR x15, x13, 0</td></tr></tbody></table>
+        </div>
+        <div class="scroll-table">
+          <div class="table-title">Registers x0-x31</div>
+          <table><thead><tr><th>Reg</th><th>Value</th></tr></thead><tbody id="regTable"><tr class=""><td>x0 <span style="color:#94a3b8">zero</span></td><td>0x00000000</td></tr><tr class=""><td>x1 <span style="color:#94a3b8">ra</span></td><td>0x00000000</td></tr><tr class=""><td>x2 <span style="color:#94a3b8">sp</span></td><td>0x00000000</td></tr><tr class=""><td>x3 <span style="color:#94a3b8">gp</span></td><td>0x00000000</td></tr><tr class=""><td>x4 <span style="color:#94a3b8">tp</span></td><td>0x00000000</td></tr><tr class=""><td>x5 <span style="color:#94a3b8">t0</span></td><td>0x00000000</td></tr><tr class=""><td>x6 <span style="color:#94a3b8">t1</span></td><td>0x00000000</td></tr><tr class=""><td>x7 <span style="color:#94a3b8">t2</span></td><td>0x00000000</td></tr><tr class=""><td>x8 <span style="color:#94a3b8">s0</span></td><td>0x00000000</td></tr><tr class=""><td>x9 <span style="color:#94a3b8">s1</span></td><td>0x00000000</td></tr><tr class=""><td>x10 <span style="color:#94a3b8">a0</span></td><td>0x00000000</td></tr><tr class=""><td>x11 <span style="color:#94a3b8">a1</span></td><td>0x00000000</td></tr><tr class=""><td>x12 <span style="color:#94a3b8">a2</span></td><td>0x00000000</td></tr><tr class=""><td>x13 <span style="color:#94a3b8">a3</span></td><td>0x00000000</td></tr><tr class=""><td>x14 <span style="color:#94a3b8">a4</span></td><td>0x00000000</td></tr><tr class=""><td>x15 <span style="color:#94a3b8">a5</span></td><td>0x00000000</td></tr><tr class=""><td>x16 <span style="color:#94a3b8">a6</span></td><td>0x00000000</td></tr><tr class=""><td>x17 <span style="color:#94a3b8">a7</span></td><td>0x00000000</td></tr><tr class=""><td>x18 <span style="color:#94a3b8">s2</span></td><td>0x00000000</td></tr><tr class=""><td>x19 <span style="color:#94a3b8">s3</span></td><td>0x00000000</td></tr><tr class=""><td>x20 <span style="color:#94a3b8">s4</span></td><td>0x00000000</td></tr><tr class=""><td>x21 <span style="color:#94a3b8">s5</span></td><td>0x00000000</td></tr><tr class=""><td>x22 <span style="color:#94a3b8">s6</span></td><td>0x00000000</td></tr><tr class=""><td>x23 <span style="color:#94a3b8">s7</span></td><td>0x00000000</td></tr><tr class=""><td>x24 <span style="color:#94a3b8">s8</span></td><td>0x00000000</td></tr><tr class=""><td>x25 <span style="color:#94a3b8">s9</span></td><td>0x00000000</td></tr><tr class=""><td>x26 <span style="color:#94a3b8">s10</span></td><td>0x00000000</td></tr><tr class=""><td>x27 <span style="color:#94a3b8">s11</span></td><td>0x00000000</td></tr><tr class=""><td>x28 <span style="color:#94a3b8">t3</span></td><td>0x00000000</td></tr><tr class=""><td>x29 <span style="color:#94a3b8">t4</span></td><td>0x00000000</td></tr><tr class=""><td>x30 <span style="color:#94a3b8">t5</span></td><td>0x00000000</td></tr><tr class=""><td>x31 <span style="color:#94a3b8">t6</span></td><td>0x00000000</td></tr></tbody></table>
+        </div>
+        <div class="scroll-table">
+          <div class="table-title">Data memory (non-zero words shown first)</div>
+          <table><thead><tr><th>Addr</th><th>Value</th></tr></thead><tbody id="memTable"><tr class=""><td>0x00000000</td><td>0x00000000</td></tr><tr class=""><td>0x00000004</td><td>0x00000000</td></tr><tr class=""><td>0x00000008</td><td>0x00000000</td></tr><tr class=""><td>0x0000000C</td><td>0x00000000</td></tr><tr class=""><td>0x00000010</td><td>0x00000000</td></tr><tr class=""><td>0x00000014</td><td>0x00000000</td></tr><tr class=""><td>0x00000018</td><td>0x00000000</td></tr><tr class=""><td>0x0000001C</td><td>0x00000000</td></tr><tr class=""><td>0x00000020</td><td>0x00000000</td></tr><tr class=""><td>0x00000024</td><td>0x00000000</td></tr><tr class=""><td>0x00000028</td><td>0x00000000</td></tr><tr class=""><td>0x0000002C</td><td>0x00000000</td></tr><tr class=""><td>0x00000030</td><td>0x00000000</td></tr><tr class=""><td>0x00000034</td><td>0x00000000</td></tr><tr class=""><td>0x00000038</td><td>0x00000000</td></tr><tr class=""><td>0x0000003C</td><td>0x00000000</td></tr><tr class=""><td>0x00000040</td><td>0x00000000</td></tr><tr class=""><td>0x00000044</td><td>0x00000000</td></tr><tr class=""><td>0x00000048</td><td>0x00000000</td></tr><tr class=""><td>0x0000004C</td><td>0x00000000</td></tr><tr class=""><td>0x00000050</td><td>0x00000000</td></tr><tr class=""><td>0x00000054</td><td>0x00000000</td></tr><tr class=""><td>0x00000058</td><td>0x00000000</td></tr><tr class=""><td>0x0000005C</td><td>0x00000000</td></tr><tr class=""><td>0x00000060</td><td>0x00000000</td></tr><tr class=""><td>0x00000064</td><td>0x00000000</td></tr><tr class=""><td>0x00000068</td><td>0x00000000</td></tr><tr class=""><td>0x0000006C</td><td>0x00000000</td></tr><tr class=""><td>0x00000070</td><td>0x00000000</td></tr><tr class=""><td>0x00000074</td><td>0x00000000</td></tr><tr class=""><td>0x00000078</td><td>0x00000000</td></tr><tr class=""><td>0x0000007C</td><td>0x00000000</td></tr><tr class=""><td>0x00000080</td><td>0x00000000</td></tr><tr class=""><td>0x00000084</td><td>0x00000000</td></tr><tr class=""><td>0x00000088</td><td>0x00000000</td></tr><tr class=""><td>0x0000008C</td><td>0x00000000</td></tr><tr class=""><td>0x00000090</td><td>0x00000000</td></tr><tr class=""><td>0x00000094</td><td>0x00000000</td></tr><tr class=""><td>0x00000098</td><td>0x00000000</td></tr><tr class=""><td>0x0000009C</td><td>0x00000000</td></tr><tr class=""><td>0x000000A0</td><td>0x00000000</td></tr><tr class=""><td>0x000000A4</td><td>0x00000000</td></tr><tr class=""><td>0x000000A8</td><td>0x00000000</td></tr><tr class=""><td>0x000000AC</td><td>0x00000000</td></tr><tr class=""><td>0x000000B0</td><td>0x00000000</td></tr><tr class=""><td>0x000000B4</td><td>0x00000000</td></tr><tr class=""><td>0x000000B8</td><td>0x00000000</td></tr><tr class=""><td>0x000000BC</td><td>0x00000000</td></tr><tr class=""><td>0x000000C0</td><td>0x00000000</td></tr><tr class=""><td>0x000000C4</td><td>0x00000000</td></tr><tr class=""><td>0x000000C8</td><td>0x00000000</td></tr><tr class=""><td>0x000000CC</td><td>0x00000000</td></tr><tr class=""><td>0x000000D0</td><td>0x00000000</td></tr><tr class=""><td>0x000000D4</td><td>0x00000000</td></tr><tr class=""><td>0x000000D8</td><td>0x00000000</td></tr><tr class=""><td>0x000000DC</td><td>0x00000000</td></tr><tr class=""><td>0x000000E0</td><td>0x00000000</td></tr><tr class=""><td>0x000000E4</td><td>0x00000000</td></tr><tr class=""><td>0x000000E8</td><td>0x00000000</td></tr><tr class=""><td>0x000000EC</td><td>0x00000000</td></tr><tr class=""><td>0x000000F0</td><td>0x00000000</td></tr><tr class=""><td>0x000000F4</td><td>0x00000000</td></tr><tr class=""><td>0x000000F8</td><td>0x00000000</td></tr><tr class=""><td>0x000000FC</td><td>0x00000000</td></tr></tbody></table>
+        </div>
+        <div class="scroll-table">
+          <div class="table-title">Execution log</div>
+          <div id="log">Reset CPU state
+</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SAMPLE_HEX = `00500093
+00A00113
+002081B3
+40110233
+0020F2B3
+0020E333
+0020C3B3
+0020A433
+00302023
+00002483
+ABCD0537
+12350513
+00408463
+06300593
+02A00593
+00209463
+00000613
+008006EF
+03700713
+04D00713
+000687E7`;
+
+const REG_NAMES = Array.from({length: 32}, (_, i) => `x${i}`);
+const ABI = ["zero","ra","sp","gp","tp","t0","t1","t2","s0","s1","a0","a1","a2","a3","a4","a5","a6","a7","s2","s3","s4","s5","s6","s7","s8","s9","s10","s11","t3","t4","t5","t6"];
+let program = [];
+let state = null;
+let timer = null;
+let changedRegs = new Set();
+let changedMem = new Set();
+
+function u32(n) { return n >>> 0; }
+function i32(n) { return n >> 0; }
+function hex32(n) { return '0x' + (u32(n)).toString(16).toUpperCase().padStart(8, '0'); }
+function hexWord(n) { return (u32(n)).toString(16).toUpperCase().padStart(8, '0'); }
+function signExtend(value, bits) {
+  const shift = 32 - bits;
+  return (value << shift) >> shift;
+}
+function parseNumber(token) {
+  const t = token.trim();
+  if (/^-?0x[0-9a-f]+$/i.test(t)) return parseInt(t, 16) | 0;
+  return parseInt(t, 10) | 0;
+}
+function regIndex(token) {
+  const t = token.trim().toLowerCase();
+  if (/^x\d+$/.test(t)) return Math.max(0, Math.min(31, parseInt(t.slice(1), 10)));
+  const idx = ABI.indexOf(t);
+  if (idx >= 0) return idx;
+  throw new Error(`Unknown register ${token}`);
+}
+function encodeI(opcode, rd, funct3, rs1, imm) {
+  return u32(((imm & 0xFFF) << 20) | (rs1 << 15) | (funct3 << 12) | (rd << 7) | opcode);
+}
+function encodeR(opcode, rd, funct3, rs1, rs2, funct7) {
+  return u32((funct7 << 25) | (rs2 << 20) | (rs1 << 15) | (funct3 << 12) | (rd << 7) | opcode);
+}
+function encodeS(opcode, funct3, rs1, rs2, imm) {
+  const imm12 = imm & 0xFFF;
+  const hi = (imm12 >> 5) & 0x7F;
+  const lo = imm12 & 0x1F;
+  return u32((hi << 25) | (rs2 << 20) | (rs1 << 15) | (funct3 << 12) | (lo << 7) | opcode);
+}
+function encodeB(opcode, funct3, rs1, rs2, imm) {
+  const x = imm & 0x1FFF;
+  return u32((((x >> 12) & 1) << 31) | (((x >> 5) & 0x3F) << 25) | (rs2 << 20) | (rs1 << 15) | (funct3 << 12) | (((x >> 1) & 0xF) << 8) | (((x >> 11) & 1) << 7) | opcode);
+}
+function encodeU(opcode, rd, imm) {
+  return u32((imm & 0xFFFFF000) | (rd << 7) | opcode);
+}
+function encodeJ(opcode, rd, imm) {
+  const x = imm & 0x1FFFFF;
+  return u32((((x >> 20) & 1) << 31) | (((x >> 1) & 0x3FF) << 21) | (((x >> 11) & 1) << 20) | (((x >> 12) & 0xFF) << 12) | (rd << 7) | opcode);
+}
+
+function assembleLine(line) {
+  const clean = line.replace(/[#;].*$/, '').trim();
+  if (!clean) return null;
+  if (/^[0-9a-f]{8}$/i.test(clean)) return u32(parseInt(clean, 16));
+  const normalized = clean.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim();
+  const parts = normalized.split(' ');
+  const op = parts[0].toUpperCase();
+  if (op === 'LUI') return encodeU(0x37, regIndex(parts[1]), parseNumber(parts[2]));
+  if (op === 'ADDI') return encodeI(0x13, regIndex(parts[1]), 0x0, regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'ANDI') return encodeI(0x13, regIndex(parts[1]), 0x7, regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'ORI') return encodeI(0x13, regIndex(parts[1]), 0x6, regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'XORI') return encodeI(0x13, regIndex(parts[1]), 0x4, regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'SLTI') return encodeI(0x13, regIndex(parts[1]), 0x2, regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'LW') return encodeI(0x03, regIndex(parts[1]), 0x2, regIndex(parts[3]), parseNumber(parts[2]));
+  if (op === 'JALR') return encodeI(0x67, regIndex(parts[1]), 0x0, regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'ADD') return encodeR(0x33, regIndex(parts[1]), 0x0, regIndex(parts[2]), regIndex(parts[3]), 0x00);
+  if (op === 'SUB') return encodeR(0x33, regIndex(parts[1]), 0x0, regIndex(parts[2]), regIndex(parts[3]), 0x20);
+  if (op === 'AND') return encodeR(0x33, regIndex(parts[1]), 0x7, regIndex(parts[2]), regIndex(parts[3]), 0x00);
+  if (op === 'OR') return encodeR(0x33, regIndex(parts[1]), 0x6, regIndex(parts[2]), regIndex(parts[3]), 0x00);
+  if (op === 'XOR') return encodeR(0x33, regIndex(parts[1]), 0x4, regIndex(parts[2]), regIndex(parts[3]), 0x00);
+  if (op === 'SLT') return encodeR(0x33, regIndex(parts[1]), 0x2, regIndex(parts[2]), regIndex(parts[3]), 0x00);
+  if (op === 'SW') return encodeS(0x23, 0x2, regIndex(parts[3]), regIndex(parts[1]), parseNumber(parts[2]));
+  if (op === 'BEQ') return encodeB(0x63, 0x0, regIndex(parts[1]), regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'BNE') return encodeB(0x63, 0x1, regIndex(parts[1]), regIndex(parts[2]), parseNumber(parts[3]));
+  if (op === 'JAL') return encodeJ(0x6F, regIndex(parts[1]), parseNumber(parts[2]));
+  throw new Error(`Unsupported input line: ${line}`);
+}
+
+function parseProgram(text) {
+  const words = [];
+  text.split(/\r?\n/).forEach((line, idx) => {
+    const word = assembleLine(line);
+    if (word !== null) words.push(word);
+  });
+  return words;
+}
+
+function decode(instr) {
+  instr = u32(instr);
+  const opcode = instr & 0x7F;
+  const rd = (instr >>> 7) & 0x1F;
+  const funct3 = (instr >>> 12) & 0x7;
+  const rs1 = (instr >>> 15) & 0x1F;
+  const rs2 = (instr >>> 20) & 0x1F;
+  const funct7b5 = (instr >>> 30) & 0x1;
+  let regWrite = 0, memWrite = 0, aluSrcA = 0, aluSrcB = 0, wbSel = 0, branch = 0, jump = 0, aluOp = 0, immSel = 0;
+  switch (opcode) {
+    case 0x37: regWrite = 1; aluSrcB = 1; aluOp = 6; immSel = 3; break;
+    case 0x13:
+      regWrite = 1; aluSrcB = 1; immSel = 0;
+      if (funct3 === 0) aluOp = 0;
+      else if (funct3 === 7) aluOp = 2;
+      else if (funct3 === 6) aluOp = 3;
+      else if (funct3 === 4) aluOp = 4;
+      else if (funct3 === 2) aluOp = 5;
+      break;
+    case 0x33:
+      regWrite = 1;
+      if (funct3 === 0) aluOp = funct7b5 ? 1 : 0;
+      else if (funct3 === 7) aluOp = 2;
+      else if (funct3 === 6) aluOp = 3;
+      else if (funct3 === 4) aluOp = 4;
+      else if (funct3 === 2) aluOp = 5;
+      break;
+    case 0x6F: regWrite = 1; aluSrcA = 1; aluSrcB = 1; wbSel = 1; jump = 1; aluOp = 0; immSel = 4; break;
+    case 0x67: regWrite = 1; aluSrcB = 1; wbSel = 1; jump = 1; aluOp = 0; immSel = 0; break;
+    case 0x63: aluSrcA = 1; aluSrcB = 1; branch = 1; aluOp = 0; immSel = 2; break;
+    case 0x03: regWrite = 1; aluSrcB = 1; wbSel = 2; aluOp = 0; immSel = 0; break;
+    case 0x23: memWrite = 1; aluSrcB = 1; aluOp = 0; immSel = 1; break;
+  }
+  let immOut = 0;
+  switch (immSel) {
+    case 0: immOut = signExtend(instr >>> 20, 12); break;
+    case 1: immOut = signExtend((((instr >>> 25) & 0x7F) << 5) | ((instr >>> 7) & 0x1F), 12); break;
+    case 2: immOut = signExtend((((instr >>> 31) & 1) << 12) | (((instr >>> 7) & 1) << 11) | (((instr >>> 25) & 0x3F) << 5) | (((instr >>> 8) & 0xF) << 1), 13); break;
+    case 3: immOut = instr & 0xFFFFF000; break;
+    case 4: immOut = signExtend((((instr >>> 31) & 1) << 20) | (((instr >>> 12) & 0xFF) << 12) | (((instr >>> 20) & 1) << 11) | (((instr >>> 21) & 0x3FF) << 1), 21); break;
+  }
+  const asm = prettyAsm(instr, {opcode, rd, rs1, rs2, funct3, funct7b5, immOut});
+  return { instr, opcode, rd, rs1, rs2, funct3, funct7b5, regWrite, memWrite, aluSrcA, aluSrcB, wbSel, branch, jump, aluOp, immSel, immOut: u32(immOut), asm };
+}
+
+function prettyAsm(instr, d = null) {
+  const x = d || decode(instr);
+  const imm = i32(x.immOut);
+  const r = REG_NAMES;
+  switch (x.opcode) {
+    case 0x37: return `LUI ${r[x.rd]}, ${hex32(x.immOut)}`;
+    case 0x13:
+      if (x.funct3 === 0) return `ADDI ${r[x.rd]}, ${r[x.rs1]}, ${imm}`;
+      if (x.funct3 === 7) return `ANDI ${r[x.rd]}, ${r[x.rs1]}, ${imm}`;
+      if (x.funct3 === 6) return `ORI ${r[x.rd]}, ${r[x.rs1]}, ${imm}`;
+      if (x.funct3 === 4) return `XORI ${r[x.rd]}, ${r[x.rs1]}, ${imm}`;
+      if (x.funct3 === 2) return `SLTI ${r[x.rd]}, ${r[x.rs1]}, ${imm}`;
+      break;
+    case 0x33:
+      if (x.funct3 === 0 && x.funct7b5 === 0) return `ADD ${r[x.rd]}, ${r[x.rs1]}, ${r[x.rs2]}`;
+      if (x.funct3 === 0 && x.funct7b5 === 1) return `SUB ${r[x.rd]}, ${r[x.rs1]}, ${r[x.rs2]}`;
+      if (x.funct3 === 7) return `AND ${r[x.rd]}, ${r[x.rs1]}, ${r[x.rs2]}`;
+      if (x.funct3 === 6) return `OR ${r[x.rd]}, ${r[x.rs1]}, ${r[x.rs2]}`;
+      if (x.funct3 === 4) return `XOR ${r[x.rd]}, ${r[x.rs1]}, ${r[x.rs2]}`;
+      if (x.funct3 === 2) return `SLT ${r[x.rd]}, ${r[x.rs1]}, ${r[x.rs2]}`;
+      break;
+    case 0x03: return `LW ${r[x.rd]}, ${imm}(${r[x.rs1]})`;
+    case 0x23: return `SW ${r[x.rs2]}, ${imm}(${r[x.rs1]})`;
+    case 0x63: return `${x.funct3 === 1 ? 'BNE' : 'BEQ'} ${r[x.rs1]}, ${r[x.rs2]}, ${imm}`;
+    case 0x6F: return `JAL ${r[x.rd]}, ${imm}`;
+    case 0x67: return `JALR ${r[x.rd]}, ${r[x.rs1]}, ${imm}`;
+  }
+  return `UNKNOWN ${hex32(instr)}`;
+}
+
+function aluExec(a, b, aluOp) {
+  a = u32(a); b = u32(b);
+  let aluOut = 0;
+  if (aluOp === 0) aluOut = u32(a + b);
+  else if (aluOp === 1) aluOut = u32(a - b);
+  else if (aluOp === 2) aluOut = u32(a & b);
+  else if (aluOp === 3) aluOut = u32(a | b);
+  else if (aluOp === 4) aluOut = u32(a ^ b);
+  else if (aluOp === 5) aluOut = (i32(a) < i32(b)) ? 1 : 0;
+  else if (aluOp === 6) aluOut = b;
+  return { aluOut: u32(aluOut), aluFlagZ: u32(aluOut) === 0 ? 1 : 0, aluFlagLT: i32(a) < i32(b) ? 1 : 0 };
+}
+
+function makeState() {
+  return {
+    pc: 0,
+    regs: new Uint32Array(32),
+    mem: new Uint32Array(1024),
+    cycle: 0,
+    trace: null,
+    prevRegs: new Uint32Array(32),
+    prevMem: new Uint32Array(1024)
+  };
+}
+
+function computeTrace() {
+  const pc = u32(state.pc);
+  const instr = program[(pc >>> 2)] ?? 0;
+  const dec = decode(instr);
+  const rs1Out = dec.rs1 === 0 ? 0 : state.regs[dec.rs1];
+  const rs2Out = dec.rs2 === 0 ? 0 : state.regs[dec.rs2];
+  const rs1Val = dec.rs1 === 0 ? 0 : rs1Out;
+  const rs2Val = dec.rs2 === 0 ? 0 : rs2Out;
+  const pcPlus4 = u32(pc + 4);
+  const immOut = dec.immOut;
+  const branchTarget = u32(pc + immOut);
+  const jalrTarget = u32((rs1Val + immOut) & ~1);
+  const branchEq = u32(rs1Val) === u32(rs2Val) ? 1 : 0;
+  const branchNeq = branchEq ? 0 : 1;
+  const takeBranch = dec.jump || (dec.branch && dec.funct3 === 0 && branchEq) || (dec.branch && dec.funct3 === 1 && branchNeq) ? 1 : 0;
+  const isJalr = dec.jump && dec.opcode === 0x67 ? 1 : 0;
+  const pcNext = takeBranch ? (isJalr ? jalrTarget : branchTarget) : pcPlus4;
+  const aluAIn = dec.aluSrcA ? pc : rs1Val;
+  const aluBIn = dec.aluSrcB ? immOut : rs2Val;
+  const alu = aluExec(aluAIn, aluBIn, dec.aluOp);
+  const memAddrIndex = (alu.aluOut >>> 2) & 0x3FF;
+  const memOut = state.mem[memAddrIndex] >>> 0;
+  let wbOut = alu.aluOut;
+  if (dec.wbSel === 1) wbOut = pcPlus4;
+  else if (dec.wbSel === 2) wbOut = memOut;
+  return {
+    ...dec,
+    pc, pcPlus4, branchTarget, jalrTarget, pcNext,
+    rs1Out: u32(rs1Out), rs2Out: u32(rs2Out), rs1Val: u32(rs1Val), rs2Val: u32(rs2Val),
+    aluAIn: u32(aluAIn), aluBIn: u32(aluBIn), aluOut: u32(alu.aluOut), aluFlagZ: alu.aluFlagZ, aluFlagLT: alu.aluFlagLT,
+    memOut: u32(memOut), wbOut: u32(wbOut), branchEq, branchNeq, takeBranch, isJalr, memAddrIndex
+  };
+}
+
+function stepCPU() {
+  if (!state) return;
+  state.prevRegs.set(state.regs);
+  state.prevMem.set(state.mem);
+  changedRegs.clear();
+  changedMem.clear();
+  const t = computeTrace();
+  if (t.memWrite) {
+    state.mem[t.memAddrIndex] = u32(t.rs2Val);
+    changedMem.add(t.memAddrIndex);
+  }
+  if (t.regWrite && t.rd !== 0) {
+    state.regs[t.rd] = u32(t.wbOut);
+    changedRegs.add(t.rd);
+  }
+  state.pc = u32(t.pcNext);
+  state.cycle += 1;
+  state.trace = t;
+  logLine(`${state.cycle.toString().padStart(3, '0')}  PC ${hex32(t.pc)}  ${t.asm}  →  next ${hex32(t.pcNext)}`);
+  render();
+}
+
+function updateTraceOnly() {
+  if (!state) state = makeState();
+  state.trace = computeTrace();
+}
+
+function resetCPU() {
+  stopRun();
+  state = makeState();
+  changedRegs.clear();
+  changedMem.clear();
+  document.getElementById('log').textContent = '';
+  updateTraceOnly();
+  logLine('Reset CPU state');
+  render();
+}
+
+function setText(id, value) { document.getElementById(id).textContent = value; }
+function setHtml(id, value) { document.getElementById(id).innerHTML = value; }
+function kvHtml(k, v) { return `<div class="kv"><div class="k">${k}</div><div class="v">${v}</div></div>`; }
+function logLine(line) {
+  const log = document.getElementById('log');
+  log.textContent += line + '\n';
+  log.scrollTop = log.scrollHeight;
+}
+function active(ids) {
+  ids.forEach(id => document.getElementById(id)?.classList.add('active'));
+}
+function clearWireActive() {
+  document.querySelectorAll('.wire').forEach(w => w.classList.remove('active'));
+}
+
+// VISUAL UPDATE SECTION: this does not move blocks. It only fills in live values and chooses which wires glow.
+function renderDiagram(t) {
+  setText('v-pc', hex32(t.pc));
+  setText('v-pc4', hex32(t.pcPlus4));
+  setText('v-instr', hex32(t.instr));
+  setText('v-mnemonic', t.asm);
+  setText('v-opcode', `opcode ${hex32(t.opcode).slice(-4)} (${t.opcode.toString(2).padStart(7,'0')})`);
+  setText('v-f3f7', `funct3 ${t.funct3} · funct7b5 ${t.funct7b5}`);
+  setText('v-rdflds', `rd x${t.rd} · rs1 x${t.rs1} · rs2 x${t.rs2}`);
+  setText('v-imm', hex32(t.immOut));
+  setText('v-rs1', `rs1  x${t.rs1} = ${hex32(t.rs1Val)}`);
+  setText('v-rs2', `rs2  x${t.rs2} = ${hex32(t.rs2Val)}`);
+  setText('v-rd', `rd   x${t.rd} ← ${hex32(t.wbOut)}`);
+  setText('v-alu', hex32(t.aluOut));
+  setText('v-aluin', `A ${hex32(t.aluAIn)} · B ${hex32(t.aluBIn)}`);
+  setText('v-memaddr', `addr ${hex32(t.aluOut)}`);
+  setText('v-memio', `${t.memWrite ? 'write ' + hex32(t.rs2Val) : 'read ' + hex32(t.memOut)}`);
+  setText('v-wb', hex32(t.wbOut));
+  setText('v-targets', `branch ${hex32(t.branchTarget)} · jalr ${hex32(t.jalrTarget)}`);
+  setText('v-nextpc', `pcNext ${hex32(t.pcNext)}`);
+  setText('v-branchcmp', `eq ${t.branchEq} · neq ${t.branchNeq} · branch ${t.branch} · jump ${t.jump}`);
+  setText('v-takebranch', `takeBranch ${t.takeBranch} · isJalr ${t.isJalr}`);
+
+  clearWireActive();
+  active(['w-pc-imem','w-pc-pc4','w-pc4-next','w-imem-dec','w-imem-imm','w-dec-regaddr','w-dec-amux','w-dec-bmux','w-dec-wbmux','w-dec-branch','w-reg-rs1-amux','w-reg-rs2-bmux','w-amux-alu','w-bmux-alu','w-alu-wbmux','w-wbmux-reg','w-pc-branchtarget','w-imm-nextpc']);
+  if (t.aluSrcA) active(['w-pc-amux']);
+  if (t.aluSrcB) active(['w-imm-bmux']);
+  if (!t.aluSrcA) active(['w-reg-rs1-amux']);
+  if (!t.aluSrcB) active(['w-reg-rs2-bmux']);
+  if (t.wbSel === 1) active(['w-pc4-wbmux']);
+  if (t.wbSel === 2 || t.memWrite) active(['w-alu-dmem','w-rs2-dmem','w-dmem-wbmux','w-dec-dmem']);
+  if (t.takeBranch) active(['w-next-pc']);
+  if (t.isJalr) active(['w-rs1-nextpc']);
+}
+
+function renderPanels(t) {
+  setText('sum-cycle', String(state.cycle));
+  setText('sum-pc', hex32(t.pc));
+  setText('sum-nextpc', hex32(t.pcNext));
+  setText('sum-instr', hex32(t.instr));
+  setText('sum-asm', t.asm);
+  setText('sum-wb', hex32(t.wbOut));
+
+  setHtml('decodeGrid', [
+    kvHtml('opcode', `${hex32(t.opcode).slice(-4)} / ${t.opcode.toString(2).padStart(7, '0')}`),
+    kvHtml('rd', `x${t.rd}`),
+    kvHtml('rs1', `x${t.rs1}`),
+    kvHtml('rs2', `x${t.rs2}`),
+    kvHtml('funct3', String(t.funct3)),
+    kvHtml('funct7b5', String(t.funct7b5)),
+    kvHtml('immSel', String(t.immSel)),
+    kvHtml('immediate', `${hex32(t.immOut)} / ${i32(t.immOut)}`)
+  ].join(''));
+
+  setHtml('signalGrid', [
+    kvHtml('regWrite', String(t.regWrite)),
+    kvHtml('memWrite', String(t.memWrite)),
+    kvHtml('aluSrcA', String(t.aluSrcA)),
+    kvHtml('aluSrcB', String(t.aluSrcB)),
+    kvHtml('wbSel', String(t.wbSel)),
+    kvHtml('branch', String(t.branch)),
+    kvHtml('jump', String(t.jump)),
+    kvHtml('aluOp', String(t.aluOp)),
+    kvHtml('branchEq', String(t.branchEq)),
+    kvHtml('branchNeq', String(t.branchNeq)),
+    kvHtml('takeBranch', String(t.takeBranch)),
+    kvHtml('isJalr', String(t.isJalr))
+  ].join(''));
+}
+
+function renderTables(t) {
+  const instrRows = program.map((instr, i) => {
+    const addr = i * 4;
+    const cls = addr === t.pc ? 'current' : '';
+    return `<tr class="${cls}"><td>${hex32(addr)}</td><td>${hex32(instr)}</td><td>${prettyAsm(instr)}</td></tr>`;
+  }).join('');
+  setHtml('instrTable', instrRows);
+
+  const regRows = Array.from({length: 32}, (_, i) => {
+    const cls = changedRegs.has(i) ? 'changed' : '';
+    return `<tr class="${cls}"><td>x${i} <span style="color:#94a3b8">${ABI[i]}</span></td><td>${hex32(state.regs[i])}</td></tr>`;
+  }).join('');
+  setHtml('regTable', regRows);
+
+  const indices = Array.from({length: 1024}, (_, i) => i);
+  indices.sort((a, b) => {
+    const an = state.mem[a] !== 0 ? 0 : 1;
+    const bn = state.mem[b] !== 0 ? 0 : 1;
+    if (an !== bn) return an - bn;
+    return a - b;
+  });
+  const memRows = indices.slice(0, 64).map(i => {
+    const cls = changedMem.has(i) ? 'changed' : '';
+    return `<tr class="${cls}"><td>${hex32(i * 4)}</td><td>${hex32(state.mem[i])}</td></tr>`;
+  }).join('');
+  setHtml('memTable', memRows);
+}
+
+// MAIN REFRESH: re-draw values in the already fixed manual layout.
+function render() {
+  const t = state.trace || computeTrace();
+  renderDiagram(t);
+  renderPanels(t);
+  renderTables(t);
+}
+
+function loadProgramFromInput() {
+  try {
+    program = parseProgram(document.getElementById('programInput').value);
+    if (!program.length) throw new Error('Program is empty');
+    resetCPU();
+    logLine(`Loaded ${program.length} words`);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function startRun() {
+  stopRun();
+  document.getElementById('statusBadge').textContent = 'running';
+  const delay = parseInt(document.getElementById('speedSel').value, 10);
+  timer = setInterval(() => {
+    stepCPU();
+    if ((state.pc >>> 2) >= program.length + 4 || state.cycle > 200) stopRun();
+  }, delay);
+}
+
+function stopRun() {
+  if (timer) clearInterval(timer);
+  timer = null;
+  document.getElementById('statusBadge').textContent = 'stopped';
+}
+
+// STARTUP SECTION: change SAMPLE_HEX loading or button hookups here.
+function boot() {
+  document.getElementById('programInput').value = SAMPLE_HEX;
+  program = parseProgram(SAMPLE_HEX);
+  document.getElementById('loadBtn').onclick = loadProgramFromInput;
+  document.getElementById('sampleBtn').onclick = () => {
+    document.getElementById('programInput').value = SAMPLE_HEX;
+    loadProgramFromInput();
+  };
+  document.getElementById('resetBtn').onclick = resetCPU;
+  document.getElementById('stepBtn').onclick = stepCPU;
+  document.getElementById('runBtn').onclick = startRun;
+  document.getElementById('stopBtn').onclick = stopRun;
+  document.getElementById('speedSel').onchange = () => { if (timer) startRun(); };
+  resetCPU();
+}
+boot();
+</script>
+
+
+</body></html>
